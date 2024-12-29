@@ -9,13 +9,9 @@ import android.os.Environment;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
+import android.widget.Button;
 import android.widget.EditText;
 
-import retrofit2.Call;
-import retrofit2.http.GET;
-import retrofit2.http.Query;
-
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -25,17 +21,16 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
+import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
-import com.frostwire.jlibtorrent.TorrentInfo;
-import com.github.se_bastiaan.torrentstream.StreamStatus;
-import com.github.se_bastiaan.torrentstream.Torrent;
+import com.example.myapplication.fragments.DiscoverFragment;
+import com.example.myapplication.fragments.ProfileFragment;
 import com.github.se_bastiaan.torrentstream.TorrentOptions;
 import com.github.se_bastiaan.torrentstream.TorrentStream;
 import com.github.se_bastiaan.torrentstream.listeners.TorrentListener;
+
+import com.example.myapplication.fragments.HomeFragment;
 
 
 import com.example.myapplication.fragments.SearchResultsFragment;
@@ -57,10 +52,36 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
-        inputSearch = findViewById(R.id.inputSearch);
-        inputSearch.setOnEditorActionListener(editorActionListener);
-
+//        inputSearch = findViewById(R.id.inputSearch);
+//        inputSearch.setOnEditorActionListener(editorActionListener);
         requestPermissions();
+
+
+        Button btnHome = findViewById(R.id.btn_home);
+//        Button btnMovies = findViewById(R.id.btn_movies);
+//        Button btnShows = findViewById(R.id.btn_shows);
+        Button btnProfile = findViewById(R.id.btn_profile);
+        Button btnDiscover = findViewById(R.id.btn_discover);
+
+        // Load the default fragment
+        loadFragment(new HomeFragment());
+
+        btnHome.setOnClickListener(v -> loadFragment(new HomeFragment()));
+//        btnMovies.setOnClickListener(v -> loadFragment(new MoviesFragment()));
+//        btnShows.setOnClickListener(v -> loadFragment(new ShowsFragment()));
+        btnProfile.setOnClickListener(v -> loadFragment(new ProfileFragment()));
+        btnDiscover.setOnClickListener(v -> loadFragment(new DiscoverFragment()));
+
+    }
+
+    private boolean loadFragment(Fragment fragment) {
+        if (fragment != null) {
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, fragment)
+                    .commit();
+            return true;
+        }
+        return false;
     }
 
     private void requestPermissions() {
@@ -199,7 +220,7 @@ public class MainActivity extends AppCompatActivity {
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
 
         // Replace the fragmentContainer with the SearchResultsFragment
-        transaction.replace(R.id.fragmentContainer, fragment);
+        transaction.replace(R.id.fragment_container, fragment);
 
         // Optionally add the transaction to the back stack
         transaction.addToBackStack(null);

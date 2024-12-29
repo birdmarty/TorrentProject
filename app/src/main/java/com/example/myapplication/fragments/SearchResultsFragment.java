@@ -42,10 +42,10 @@ public class SearchResultsFragment extends Fragment implements TorrentAdapter.Re
 
     public TorrentStream torrentStream;
     private static final String TAG = "SearchResultsFragment";
-
-    private TorrentAdapter torrentAdapter;
-    private final ArrayList<SearchResult> searchResults = new ArrayList<>();
+    private static TorrentAdapter torrentAdapter;
+    private static final ArrayList<SearchResult> searchResults = new ArrayList<>();
     private String infohash;
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_search_result, container, false);
@@ -193,7 +193,7 @@ public class SearchResultsFragment extends Fragment implements TorrentAdapter.Re
 //        }
 //    }
 
-    private class LoadSearchResultsTask extends AsyncTask<String, Void, ArrayList<SearchResult>> {
+    public static class LoadSearchResultsTask extends AsyncTask<String, Void, ArrayList<SearchResult>> {
         @Override
         protected ArrayList<SearchResult> doInBackground(String... params) {
             ArrayList<SearchResult> results = new ArrayList<>();
@@ -217,7 +217,7 @@ public class SearchResultsFragment extends Fragment implements TorrentAdapter.Re
             return results;
         }
 
-        private String fetchInfohash(String link) {
+        public String fetchInfohash(String link) {
             try{
                 Document torrentPage = Jsoup.connect(link).get();
                 Element infohashElement = torrentPage.select("div.infohash-box span").first();
