@@ -9,6 +9,9 @@ public class SortList {
             case "Seeds DESC":
                 sortOneThree = "/seeders/desc/";
                 break;
+            case "Sort by...":
+                sortOneThree = "/seeders/desc/";
+                break;
             case "Seeds ASC":
                 sortOneThree = "/seeders/asc/";
                 break;
@@ -33,7 +36,12 @@ public class SortList {
         }
     }
 
-    public String urlOneThree(String keyword) {
+    public String getSort() {
+        return sortOneThree;
+    }
+
+    public String urlSortSearch(String keyword) {
         return "https://www.1337x.to/" + "sort-search/" + keyword + sortOneThree + "1/";
     }
 }
+

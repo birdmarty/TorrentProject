@@ -29,6 +29,8 @@ android {
 }
 
 dependencies {
+    implementation 'com.github.bumptech.glide:glide:4.15.1'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.15.1'
     def torrentStreamVersion = "2.7.0"  // Replace with the latest version
     implementation libs.torrentstream.android
     implementation 'org.jsoup:jsoup:1.16.1'

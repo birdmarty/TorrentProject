@@ -1,66 +1,70 @@
 package com.example.myapplication.fragments;
 
-import android.os.AsyncTask;
+import android.util.Log;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
+import com.bumptech.glide.Glide;
 import android.os.Bundle;
-
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
-import android.view.KeyEvent;
-import android.view.inputmethod.EditorInfo;
-
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
-
-import com.example.myapplication.fragments.SearchResultsFragment;
 
 import com.example.myapplication.R;
 import com.example.myapplication.adapters.TorrentAdapter;
+import com.example.myapplication.parsing.CategoryList;
 import com.example.myapplication.parsing.SearchResult;
 import com.example.myapplication.parsing.SortList;
-import com.github.se_bastiaan.torrentstream.StreamStatus;
-import com.github.se_bastiaan.torrentstream.Torrent;
-import com.github.se_bastiaan.torrentstream.TorrentStream;
-import com.github.se_bastiaan.torrentstream.listeners.TorrentListener;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import com.example.myapplication.repository.TorrentRepository;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+public class DiscoverFragment extends Fragment implements TorrentAdapter.RecyclerviewListener {
 
-public class DiscoverFragment extends Fragment  implements TorrentAdapter.RecyclerviewListener, TorrentListener {
-
+    private ImageView loadingIcon;
     private EditText inputSearch;
-    private String keyword;
+    private Spinner categorySpinner, sortSpinner;
+    private String  searchUrl;
+    private String keyword = "";
     private String sortItem = "Seeds DESC";
-    public TorrentStream torrentStream;
-    private static final String TAG = "SearchResultsFragment";
+    private String category = "All";
+    private int current = 0;
+    private String TAG = "101";
 
     private TorrentAdapter torrentAdapter;
     private ArrayList<SearchResult> TorrentsList = new ArrayList<>();
-    private String infohash;
+
+    private TorrentRepository torrentRepository;
+    private ExecutorService executorService;
+    private Handler uiHandler;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        torrentRepository = new TorrentRepository();
+        executorService = Executors.newSingleThreadExecutor();
+        uiHandler = new Handler(Looper.getMainLooper());
     }
-
-
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_discover, container, false);
 
         RecyclerView recyclerView = rootView.findViewById(R.id.recyclerview);
+        loadingIcon = rootView.findViewById(R.id.loadingIcon);
+        categorySpinner = rootView.findViewById(R.id.categorySpinner);
+        sortSpinner = rootView.findViewById(R.id.sortSpinner);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         torrentAdapter = new TorrentAdapter(this, TorrentsList);
         recyclerView.setAdapter(torrentAdapter);
@@ -68,170 +72,143 @@ public class DiscoverFragment extends Fragment  implements TorrentAdapter.Recycl
         inputSearch = rootView.findViewById(R.id.inputSearch);
         inputSearch.setOnEditorActionListener(editorActionListener);
 
+        // Set up the spinners
+        setUpSpinners();
+
         // Load trending torrents
-        new LoadTrendingTorrentsTask().execute("https://1337x.to/trending");
+        loadTrendingTorrents();
 
         return rootView;
     }
 
+    private void setUpSpinners() {
+        // Set up category spinner
+        ArrayAdapter<CharSequence> categoryAdapter = ArrayAdapter.createFromResource(
+                getContext(), R.array.category_options, android.R.layout.simple_spinner_item);
+        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        categorySpinner.setAdapter(categoryAdapter);
 
+        // Set up sort spinner
+        ArrayAdapter<CharSequence> sortAdapter = ArrayAdapter.createFromResource(
+                getContext(), R.array.sort_options, android.R.layout.simple_spinner_item);
+        sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sortSpinner.setAdapter(sortAdapter);
 
-//    Load the trending on startup and save it in device storage/have a database and load the trending shit from there idk
-    public class LoadTrendingTorrentsTask extends AsyncTask<String, Void, ArrayList<SearchResult>> {
-        @Override
-
-//        protected void onPreExecute() {
-////            super.onPreExecute();
-////            // Add a progress indicator
-////            // progressBar.setVisibility(View.VISIBLE);
-////        }
-
-        protected ArrayList<SearchResult> doInBackground(String... params) {
-            ArrayList<SearchResult> results = new ArrayList<>();
-            try {
-                Document document = Jsoup.connect(params[0]).get();
-                Elements rows = document.select("tbody > tr");
-                for (Element row : rows) {
-                    Element titleLink = row.select("td.coll-1 a:not(.icon)").first();
-                    String title = titleLink.text();
-                    String seeds = row.select("td:nth-child(2)").text();
-                    String leeches = row.select("td:nth-child(3)").text();
-                    String size = row.select("td.coll-4").first().ownText();
-                    String link = "https://www.1337x.to" + titleLink.attr("href");
-                    String infohash = fetchInfohash(link);
-
-                    results.add(new SearchResult(title, "Seeds: " + seeds, "Leeches: " + leeches, "Size: " + size, "1337x", link, infohash));
+        // Handle category spinner selection
+        categorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
+                category = parentView.getItemAtPosition(position).toString();
+                if (!category.equals("All") && !keyword.isEmpty())
+                {
+                    searchTorrents(keyword);  // Trigger search with the selected category
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return results;
-        }
 
-        public String fetchInfohash(String link) {
-            try {
-                Document torrentPage = Jsoup.connect(link).get();
-                Element infohashElement = torrentPage.select("div.infohash-box span").first();
-                if (infohashElement != null) {
-                    return infohashElement.text();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parentView) {
+                category = "All";
+            }
+        });
+
+        // Handle sort spinner selection
+        sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
+                sortItem = parentView.getItemAtPosition(position).toString();
+                if (!sortItem.equals("Sort By...") && !keyword.isEmpty()) {
+                    searchTorrents(keyword);  // Trigger search with the selected sorting option
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-            return null;
-        }
 
-        @Override
-        protected void onPostExecute(ArrayList<SearchResult> results) {
-            TorrentsList.clear();
-            TorrentsList.addAll(results);
-            torrentAdapter.notifyDataSetChanged();
-        }
+            @Override
+            public void onNothingSelected(AdapterView<?> parentView) {
+                sortItem = "Sort By...";
+            }
+        });
     }
 
+    private void loadTrendingTorrents() {
+        showLoading(); // Show loading icon
 
-    private final TextView.OnEditorActionListener editorActionListener = new TextView.OnEditorActionListener() {
-        @Override
-        public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                // Get the keyword from the search bar
-                keyword = inputSearch.getText().toString().trim();
-
-                // Check if the keyword is not empty
-                if (!keyword.isEmpty()) {
-                    // Perform the search here
-                    new LoadSearchResultsTask().execute(new SortList(sortItem).urlOneThree(keyword));
-                    return true;
-                }
+        executorService.execute(() -> {
+            try {
+                ArrayList<SearchResult> results = torrentRepository.getTrendingTorrents();
+                uiHandler.post(() -> {
+                    TorrentsList.clear();
+                    TorrentsList.addAll(results);
+                    torrentAdapter.notifyDataSetChanged();
+                    hideLoading(); // Hide loading icon when done
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+                hideLoading(); // Hide loading icon if an error occurs
             }
-            return false;
+        });
+    }
+
+    private void searchTorrents(String keyword) {
+        showLoading(); // Show loading icon
+        TorrentsList.clear();
+        torrentAdapter.notifyDataSetChanged();
+
+        if (!category.equals("All") && !sortItem.equals("Sort by...")) {
+            searchUrl = "https://1337x.to/sort-category-search/" + keyword + new CategoryList(category).getCategory() + new SortList(sortItem).getSort() + "1/";
         }
+
+        else if (category.equals("All") && !sortItem.equals("Sort By...")) {
+            searchUrl = new SortList(sortItem).urlSortSearch(keyword);
+        }
+
+        else {
+            searchUrl = new CategoryList(category).urlCategorySearch(keyword);
+        }
+
+        Log.d(TAG, searchUrl);
+        executorService.execute(() -> {
+            try {
+                ArrayList<SearchResult> results = torrentRepository.searchTorrents(searchUrl);
+                uiHandler.post(() -> {
+                    TorrentsList.clear();
+                    TorrentsList.addAll(results);
+                    torrentAdapter.notifyDataSetChanged();
+                    hideLoading(); // Hide loading icon when done
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+                hideLoading(); // Hide loading icon if an error occurs
+            }
+        });
+    }
+
+    private void showLoading() {
+        uiHandler.post(() -> {
+            loadingIcon.setVisibility(View.VISIBLE);
+            // Load the GIF using Glide
+            Glide.with(getContext())
+                    .load(R.drawable.loading)  // This is your GIF file
+                    .into(loadingIcon);
+        });
+    }
+
+    private void hideLoading() {
+        uiHandler.post(() -> loadingIcon.setVisibility(View.GONE));
+    }
+
+    private final TextView.OnEditorActionListener editorActionListener = (v, actionId, event) -> {
+        if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+            keyword = inputSearch.getText().toString().trim();
+            if (!keyword.isEmpty()) {
+                searchTorrents(keyword);
+                return true;
+            }
+        }
+        return false;
     };
-
-    public class LoadSearchResultsTask extends AsyncTask<String, Void, ArrayList<SearchResult>> {
-        @Override
-
-//        protected void onPreExecute() {
-//            super.onPreExecute();
-//            // Add a progress indicator
-//            // progressBar.setVisibility(View.VISIBLE);
-//        }
-
-        protected ArrayList<SearchResult> doInBackground(String... params) {
-            ArrayList<SearchResult> results = new ArrayList<>();
-            try {
-                Document document = Jsoup.connect(params[0]).get();
-                Elements rows = document.select("tbody > tr");
-                for (Element row : rows) {
-                    Element titleLink = row.select("td.coll-1 a:not(.icon)").first();
-                    String title = titleLink.text();
-                    String seeds = row.select("td:nth-child(2)").text();
-                    String leeches = row.select("td:nth-child(3)").text();
-                    String size = row.select("td.coll-4").first().ownText();
-                    String link = "https://www.1337x.to" + titleLink.attr("href");
-                    String infohash = fetchInfohash(link);
-
-                    results.add(new SearchResult(title, "Seeds: " + seeds, "Leeches: " + leeches, "Size: " + size, "1337x", link, infohash));
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return results;
-        }
-
-        public String fetchInfohash(String link) {
-            try{
-                Document torrentPage = Jsoup.connect(link).get();
-                Element infohashElement = torrentPage.select("div.infohash-box span").first();
-                if (infohashElement!= null) {
-                    return infohashElement.text();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null; // Return null if the infohash is not found
-        }
-
-        @Override
-        protected void onPostExecute(ArrayList<SearchResult> results) {
-            TorrentsList.clear();
-            TorrentsList.addAll(results);
-            torrentAdapter.notifyDataSetChanged();
-        }
-    }
 
     @Override
     public void onItemClick(int position) {
-
-    }
-
-    @Override
-    public void onStreamPrepared(Torrent torrent) {
-
-    }
-
-    @Override
-    public void onStreamStarted(Torrent torrent) {
-
-    }
-
-    @Override
-    public void onStreamError(Torrent torrent, Exception e) {
-
-    }
-
-    @Override
-    public void onStreamReady(Torrent torrent) {
-
-    }
-
-    @Override
-    public void onStreamProgress(Torrent torrent, StreamStatus status) {
-
-    }
-
-    @Override
-    public void onStreamStopped() {
 
     }
 }
