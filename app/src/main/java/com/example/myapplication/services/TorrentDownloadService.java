@@ -1,0 +1,206 @@
+package com.example.myapplication.services;
+
+import static com.github.se_bastiaan.torrentstream.utils.ThreadUtils.runOnUiThread;
+
+import android.annotation.SuppressLint;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Intent;
+import android.os.Binder;
+import android.os.Build;
+import android.os.Environment;
+import android.os.IBinder;
+import android.util.Log;
+import android.widget.Toast;
+
+import androidx.core.app.NotificationCompat;
+
+import com.example.myapplication.R;
+import com.github.se_bastiaan.torrentstream.StreamStatus;
+import com.github.se_bastiaan.torrentstream.Torrent;
+import com.github.se_bastiaan.torrentstream.TorrentOptions;
+import com.github.se_bastiaan.torrentstream.TorrentStream;
+import com.github.se_bastiaan.torrentstream.listeners.TorrentListener;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class TorrentDownloadService extends Service implements TorrentListener {
+    private static final String TAG = "TorrentDownloadService";
+    private static final String CHANNEL_ID = "torrent_download_channel";
+    private TorrentStream torrentStream;
+    private String torrentLink;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        torrentLink = intent.getStringExtra("torrentLink");
+        if (torrentLink != null) {
+            executor.execute(this::fetchAndStartTorrent);
+        } else {
+            Log.e(TAG, "Torrent link is null");
+            stopSelf();
+        }
+        return START_STICKY;
+    }
+
+    private void fetchAndStartTorrent() {
+        try {
+            // Fetch infohash from the torrent detail page
+            Document doc = Jsoup.connect(torrentLink)
+                    .userAgent("Mozilla/5.0")
+                    .timeout(15000)
+                    .get();
+
+            Element infohashElement = doc.selectFirst("div.infohash-box span");
+            if (infohashElement != null) {
+                String infohash = infohashElement.text();
+                String torrentUrl = "https://itorrents.org/torrent/" + infohash + ".torrent";
+                startTorrentDownload(torrentUrl);
+            } else {
+                showErrorToast("Could not find torrent info");
+                stopSelf();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error fetching infohash: " + e.getMessage());
+            showErrorToast("Error fetching torrent info");
+            stopSelf();
+        }
+    }
+
+    private void startTorrentDownload(String torrentUrl) {
+        try {
+            if (torrentStream == null) {
+                initializeTorrentStream();
+            }
+
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Starting download", Toast.LENGTH_SHORT).show();
+                createNotificationChannel();
+            });
+
+            torrentStream.startStream(torrentUrl);
+            Log.d(TAG, "Torrent download started: " + torrentUrl);
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting stream: " + e.getMessage());
+            showErrorToast("Failed to start download");
+            stopSelf();
+        }
+    }
+
+    private void initializeTorrentStream() {
+        try {
+            File saveLocation = new File(Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS), "TorrentStream");
+            if (!saveLocation.exists()) {
+                boolean dirCreated = saveLocation.mkdirs();
+                Log.d(TAG, "Directory created: " + dirCreated);
+            }
+
+            TorrentOptions torrentOptions = new TorrentOptions.Builder()
+                    .saveLocation(saveLocation)
+                    .removeFilesAfterStop(false)
+                    .maxConnections(50)
+                    .maxDownloadSpeed(0)
+                    .maxUploadSpeed(0)
+                    .build();
+
+            torrentStream = TorrentStream.init(torrentOptions);
+            torrentStream.addListener(this);
+            Log.d(TAG, "TorrentStream initialized");
+        } catch (Exception e) {
+            Log.e(TAG, "Error initializing TorrentStream: " + e.getMessage());
+        }
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "Torrent Download";
+            String description = "Notifications for torrent download progress";
+            int importance = NotificationManager.IMPORTANCE_LOW;
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
+    private void updateNotification(int progress, int downloadSpeed, int seedCount) {
+        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_download)
+                .setContentText("Progress: " + progress + "% - Speed: " + downloadSpeed + " KB/s - Seeds: " + seedCount)
+                .setProgress(100, progress, false)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW);
+
+        notificationManager.notify(1, builder.build());
+    }
+
+    private void showErrorToast(String message) {
+        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_SHORT).show());
+    }
+
+
+
+    // TorrentListener callbacks
+    @Override
+    public void onStreamPrepared(Torrent torrent) {
+        Log.d(TAG, "Stream prepared");
+    }
+
+    @Override
+    public void onStreamStarted(Torrent torrent) {
+        Log.d(TAG, "Stream started");
+    }
+
+    @Override
+    public void onStreamError(Torrent torrent, Exception e) {
+        Log.e(TAG, "Stream error: " + e.getMessage());
+        showErrorToast("Download error: " + e.getMessage());
+        stopSelf();
+    }
+
+    @Override
+    public void onStreamReady(Torrent torrent) {
+        Log.d(TAG, "Stream ready");
+    }
+
+    @Override
+    public void onStreamProgress(Torrent torrent, StreamStatus status) {
+        updateNotification((int) status.progress, status.downloadSpeed / 1024, status.seeds);
+    }
+
+    @Override
+    public void onStreamStopped() {
+        Log.d(TAG, "Stream stopped");
+        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        notificationManager.cancel(1);
+        stopSelf();
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (torrentStream != null) {
+            torrentStream.removeListener(this);
+            torrentStream.stopStream();
+        }
+        executor.shutdown();
+    }
+}

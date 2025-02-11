@@ -1,0 +1,65 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".fragments.DiscoverFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Search bar and spinners in a horizontal layout -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="10dp">
+
+            <!-- Search EditText -->
+            <EditText
+                android:id="@+id/inputSearch"
+                android:layout_width="178dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Search"
+                android:imeOptions="actionSearch"
+                android:inputType="text" />
+
+            <!-- Category Spinner -->
+            <Spinner
+                android:id="@+id/categorySpinner"
+                android:layout_width="88dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:entries="@array/category_options" />
+
+            <!-- Sort Spinner -->
+            <Spinner
+                android:id="@+id/sortSpinner"
+                android:layout_width="91dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:entries="@array/sort_options" />
+        </LinearLayout>
+
+        <!-- RecyclerView to display results -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="vertical" />
+
+
+    </LinearLayout>
+
+    <!-- Centering the ImageView -->
+    <ImageView
+        android:id="@+id/loadingIcon"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:src="@drawable/loading"
+        android:layout_gravity="center"
+        android:visibility="gone" /> <!-- Start with hidden -->
+
+</FrameLayout>
