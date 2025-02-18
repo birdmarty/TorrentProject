@@ -57,21 +57,23 @@ public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHold
 
             AlertDialog.Builder builder = new AlertDialog.Builder(context);
             builder.setTitle(result.getTitle())
-                    .setItems(new String[]{"Watch", "Download"}, (dialog, which) -> {
-                        Log.d("TorrentAdapter", "Selected option: " + (which == 0 ? "Watch" : "Download"));
+                    .setItems(new String[]{TorrentActions.ACTION_WATCH, TorrentActions.ACTION_DOWNLOAD}, (dialog, which) -> {
+                        String selectedAction = (which == 0) ? TorrentActions.ACTION_WATCH : TorrentActions.ACTION_DOWNLOAD;
+                        Log.d("TorrentAdapter", "Selected option: " + selectedAction);
 
                         Intent serviceIntent = new Intent(context, TorrentDownloadService.class);
                         serviceIntent.putExtra("infoHash", result.getInfoHash());
                         serviceIntent.putExtra("torrentLink", result.getLink());
                         serviceIntent.putExtra("title", result.getTitle());
-                        serviceIntent.putExtra("watchMode", which == 0);
-                        Log.d("TorrentAdapter", "Starting service with infoHash: " + result.getInfoHash());
+                        serviceIntent.putExtra("action", selectedAction);
+                        Log.d("TorrentAdapter", "Starting service with action: " + selectedAction);
 
                         context.startService(serviceIntent);
                     })
                     .show();
-
         });
+
+
 
     }
 

@@ -1,8 +1,11 @@
 package com.example.myapplication.parsing;
 
 
+import android.util.Log;
+
 public class SortList {
     private String sortOneThree;
+    private String sortItem;
 
     public SortList(String sortItem) {
         switch (sortItem) {
@@ -15,10 +18,10 @@ public class SortList {
             case "Seeds ASC":
                 sortOneThree = "/seeders/asc/";
                 break;
-            case "Leeches DESC":
+            case "Leechers DESC":
                 sortOneThree = "/leechers/desc/";
                 break;
-            case "Leeches ASC":
+            case "Leechers ASC":
                 sortOneThree = "/leechers/asc/";
                 break;
             case "Size DESC":
@@ -37,6 +40,7 @@ public class SortList {
     }
 
     public String getSort() {
+        Log.d("sort",sortItem + "," + sortOneThree);
         return sortOneThree;
     }
 

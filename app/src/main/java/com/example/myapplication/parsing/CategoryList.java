@@ -9,6 +9,9 @@ public class CategoryList {
             case "Movies":
                 category1 = "/Movies";
                 break;
+            case "All":
+                category1 = "/Movies";
+                break;
             case "TV Shows":
                 category1 = "/TV";
                 break;

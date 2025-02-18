@@ -2,14 +2,10 @@ package com.example.myapplication.services;
 
 import static com.github.se_bastiaan.torrentstream.utils.ThreadUtils.runOnUiThread;
 
-import android.annotation.SuppressLint;
-import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
-import android.os.Binder;
 import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
@@ -25,13 +21,12 @@ import com.github.se_bastiaan.torrentstream.TorrentOptions;
 import com.github.se_bastiaan.torrentstream.TorrentStream;
 import com.github.se_bastiaan.torrentstream.listeners.TorrentListener;
 
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -40,17 +35,34 @@ public class TorrentDownloadService extends Service implements TorrentListener {
     private static final String CHANNEL_ID = "torrent_download_channel";
     private TorrentStream torrentStream;
     private String torrentLink;
+    private String action;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         torrentLink = intent.getStringExtra("torrentLink");
-        if (torrentLink != null) {
-            executor.execute(this::fetchAndStartTorrent);
-        } else {
-            Log.e(TAG, "Torrent link is null");
-            stopSelf();
+        action = intent.getStringExtra("action");
+        Log.d(TAG,"Action selected: " + action);
+
+        if (action != null && action.equals("Download"))
+        {
+            if (torrentLink != null) {
+                executor.execute(this::fetchAndStartTorrent);
+            } else {
+                Log.e(TAG, "Torrent link is null");
+                stopSelf();
+            }
         }
+
+        else if (action != null && action.equals("Watch")) {
+            if (torrentLink != null) {
+                // add implementation
+            } else {
+                Log.e(TAG, "Torrent link is null");
+                stopSelf();
+            }
+        }
+
         return START_STICKY;
     }
 
@@ -65,8 +77,11 @@ public class TorrentDownloadService extends Service implements TorrentListener {
             Element infohashElement = doc.selectFirst("div.infohash-box span");
             if (infohashElement != null) {
                 String infohash = infohashElement.text();
-                String torrentUrl = "https://itorrents.org/torrent/" + infohash + ".torrent";
+//                String torrentUrl = "https://itorrents.org/torrent/" + infohash + ".torrent";
+                String torrentUrl = "magnet:?xt=urn:btih:" + infohash;
+
                 startTorrentDownload(torrentUrl);
+
             } else {
                 showErrorToast("Could not find torrent info");
                 stopSelf();
@@ -103,25 +118,35 @@ public class TorrentDownloadService extends Service implements TorrentListener {
             File saveLocation = new File(Environment.getExternalStoragePublicDirectory(
                     Environment.DIRECTORY_DOWNLOADS), "TorrentStream");
             if (!saveLocation.exists()) {
-                boolean dirCreated = saveLocation.mkdirs();
-                Log.d(TAG, "Directory created: " + dirCreated);
+                saveLocation.mkdirs();
             }
 
             TorrentOptions torrentOptions = new TorrentOptions.Builder()
                     .saveLocation(saveLocation)
                     .removeFilesAfterStop(false)
-                    .maxConnections(50)
-                    .maxDownloadSpeed(0)
-                    .maxUploadSpeed(0)
                     .build();
-
             torrentStream = TorrentStream.init(torrentOptions);
             torrentStream.addListener(this);
-            Log.d(TAG, "TorrentStream initialized");
+
+
+            // Configure torrent options for maximum performance
+//            TorrentOptions torrentOptions = new TorrentOptions.Builder()
+//                    .saveLocation(saveLocation)
+//                    .removeFilesAfterStop(false)
+//                    .maxConnections(500) // Maximum allowed connections
+//                    .maxDownloadSpeed(0)  // 0 = unlimited download
+//                    .prepareSize(30 * 1024L * 1024L) // 30MB initial buffer
+//                    .listeningPort(6891)  // Standard BitTorrent port
+//                    .build();
+//
+//            torrentStream = TorrentStream.init(torrentOptions);
+//            torrentStream.addListener(this);
         } catch (Exception e) {
             Log.e(TAG, "Error initializing TorrentStream: " + e.getMessage());
         }
     }
+
+
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -178,7 +203,12 @@ public class TorrentDownloadService extends Service implements TorrentListener {
 
     @Override
     public void onStreamProgress(Torrent torrent, StreamStatus status) {
-        updateNotification((int) status.progress, status.downloadSpeed / 1024, status.seeds);
+        if (status.bufferProgress < 100) {
+
+            Log.d(TAG, "progress: " + status.bufferProgress + " speed: " + (status.downloadSpeed / 1024) + " seeds: " + status.seeds);
+
+            updateNotification((int) status.bufferProgress, status.downloadSpeed / 1024, status.seeds);
+        }
     }
 
     @Override

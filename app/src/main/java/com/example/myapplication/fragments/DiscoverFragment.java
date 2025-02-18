@@ -77,11 +77,11 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
     private void initializeCache() {
         cacheManager = new TorrentCacheManager(requireContext());
         ArrayList<SearchResult> cachedResults = cacheManager.getCachedDiscoverResults();
-        if (cachedResults != null && !cachedResults.isEmpty()) {
+        if (cachedResults != null && !cachedResults.isEmpty()) { //check if we have cached trending
             torrentsList.clear();
             torrentsList.addAll(cachedResults);
             torrentAdapter.notifyDataSetChanged();
-        } else {
+        } else { //if not, load trending from 1337x
             loadTrendingTorrents();
         }
     }
@@ -97,11 +97,12 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
         sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         sortSpinner.setAdapter(sortAdapter);
 
-        categorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        categorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {    // category listener
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
                 category = parent.getItemAtPosition(pos).toString();
-                if (!category.equals("All") && !keyword.isEmpty()) {
+                Log.d(TAG,category);
+                if (!keyword.isEmpty()) {
                     searchTorrents(keyword);
                 }
             }
@@ -112,11 +113,12 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
             }
         });
 
-        sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {    // sort listener
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
                 sortItem = parent.getItemAtPosition(pos).toString();
-                if (!sortItem.equals("Sort By...") && !keyword.isEmpty()) {
+                Log.d(TAG,sortItem);
+                if (!keyword.isEmpty()) {
                     searchTorrents(keyword);
                 }
             }
@@ -158,6 +160,7 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
         torrentAdapter.notifyDataSetChanged();
 
         buildSearchUrl();
+        Log.d(TAG, "Search URL: " + searchUrl);
 
         torrentRepository.searchTorrents(searchUrl, new TorrentRepository.TorrentListener() {
             @Override
@@ -186,9 +189,13 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
                 searchUrl = "https://1337x.to/sort-category-search/" + keyword
                         + new CategoryList(category).getCategory()
                         + new SortList(sortItem).getSort() + "1/";
+                Log.d("both",sortItem + "," + new SortList(sortItem).getSort());
+                Log.d("both",category + "," + new CategoryList(category).getCategory());
             } else if (category.equals("All") && !sortItem.equals("Sort By...")) {
+                Log.d("only sort",sortItem + "," + new SortList(sortItem).getSort());
                 searchUrl = new SortList(sortItem).urlSortSearch(keyword);
             } else {
+                Log.d("only category",category + "," + new CategoryList(category).getCategory());
                 searchUrl = new CategoryList(category).urlCategorySearch(keyword);
             }
         } catch (Exception e) {
