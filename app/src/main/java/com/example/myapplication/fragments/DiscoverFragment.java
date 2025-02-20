@@ -6,6 +6,8 @@ import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 import com.bumptech.glide.Glide;
 import android.os.Bundle;
+
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -25,12 +27,15 @@ import com.example.myapplication.cache.TorrentCacheManager;
 import com.example.myapplication.parsing.CategoryList;
 import com.example.myapplication.parsing.SearchResult;
 import com.example.myapplication.parsing.SortList;
+import com.example.myapplication.parsing.Url;
 import com.example.myapplication.repository.TorrentRepository;
 
 import java.util.ArrayList;
 
 public class DiscoverFragment extends Fragment implements TorrentAdapter.RecyclerviewListener {
 
+    private static final String SITE_1337X = "1337x";
+    private static final String SITE_LIME = "LimeTorrents";
     private static final String TAG = "DiscoverFragment";
     private ImageView loadingIcon;
     private EditText inputSearch;
@@ -39,6 +44,7 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
     private String keyword = "";
     private String sortItem = "Seeds DESC";
     private String category = "All";
+    private String currentSite = SITE_1337X;       // Default site
     private TorrentCacheManager cacheManager;
     private TorrentAdapter torrentAdapter;
     private ArrayList<SearchResult> torrentsList = new ArrayList<>();
@@ -50,11 +56,19 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
         super.onCreate(savedInstanceState);
         torrentRepository = new TorrentRepository();
         uiHandler = new Handler(Looper.getMainLooper());
+        currentSite = SITE_1337X;
+        updateSiteSelectionUI();
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_discover, container, false);
+
+        TextView tv1337x = rootView.findViewById(R.id.tv1337x);
+        TextView tvLime = rootView.findViewById(R.id.tvLimeTorrents);
+
+        tv1337x.setOnClickListener(v -> on1337xClicked());
+        tvLime.setOnClickListener(v -> onLimeTorrentsClicked());
 
         RecyclerView recyclerView = rootView.findViewById(R.id.recyclerview);
         loadingIcon = rootView.findViewById(R.id.loadingIcon);
@@ -70,7 +84,9 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
 
         setupSpinners();
         initializeCache();
-
+        currentSite = SITE_1337X;
+        updateSiteSelectionUI();
+        updateSpinners();
         return rootView;
     }
 
@@ -87,24 +103,13 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
     }
 
     private void setupSpinners() {
-        ArrayAdapter<CharSequence> categoryAdapter = ArrayAdapter.createFromResource(
-                getContext(), R.array.category_options, android.R.layout.simple_spinner_item);
-        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        categorySpinner.setAdapter(categoryAdapter);
+        updateSpinners(); // Use the new unified method
 
-        ArrayAdapter<CharSequence> sortAdapter = ArrayAdapter.createFromResource(
-                getContext(), R.array.sort_options, android.R.layout.simple_spinner_item);
-        sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        sortSpinner.setAdapter(sortAdapter);
-
-        categorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {    // category listener
+        categorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
                 category = parent.getItemAtPosition(pos).toString();
-                Log.d(TAG,category);
-                if (!keyword.isEmpty()) {
-                    searchTorrents(keyword);
-                }
+                if (!keyword.isEmpty()) searchTorrents(keyword);
             }
 
             @Override
@@ -113,14 +118,11 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
             }
         });
 
-        sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {    // sort listener
+        sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
                 sortItem = parent.getItemAtPosition(pos).toString();
-                Log.d(TAG,sortItem);
-                if (!keyword.isEmpty()) {
-                    searchTorrents(keyword);
-                }
+                if (!keyword.isEmpty()) searchTorrents(keyword);
             }
 
             @Override
@@ -132,26 +134,50 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
 
     private void loadTrendingTorrents() {
         showLoading();
-        torrentRepository.getTrendingTorrents(new TorrentRepository.TorrentListener() {
-            @Override
-            public void onResultsReady(ArrayList<SearchResult> results) {
-                uiHandler.post(() -> {
-                    cacheManager.cacheDiscoverResults(results);
-                    torrentsList.clear();
-                    torrentsList.addAll(results);
-                    torrentAdapter.notifyDataSetChanged();
-                    hideLoading();
-                });
-            }
+        if (currentSite.equals("1337x")) {      // Load 1337x results
+            torrentRepository.getTrendingTorrents1337x(new TorrentRepository.TorrentListener() {
+                @Override
+                public void onResultsReady(ArrayList<SearchResult> results) {
+                    uiHandler.post(() -> {
+                        cacheManager.cacheDiscoverResults(results);
+                        torrentsList.clear();
+                        torrentsList.addAll(results);
+                        torrentAdapter.notifyDataSetChanged();
+                        hideLoading();
+                    });
+                }
 
-            @Override
-            public void onError(String message) {
-                uiHandler.post(() -> {
-                    hideLoading();
-                    showToast("Error: " + message);
-                });
-            }
-        });
+                @Override
+                public void onError(String message) {
+                    uiHandler.post(() -> {
+                        hideLoading();
+                        showToast("Error: " + message);
+                    });
+                }
+            });
+        }
+        else if (currentSite.equals("LimeTorrents")) {      // Load Lime Torrents results
+            torrentRepository.getTrendingTorrentsLimeTorrents(new TorrentRepository.TorrentListener() {
+                @Override
+                public void onResultsReady(ArrayList<SearchResult> results) {
+                    uiHandler.post(() -> {
+                        cacheManager.cacheDiscoverResults(results);
+                        torrentsList.clear();
+                        torrentsList.addAll(results);
+                        torrentAdapter.notifyDataSetChanged();
+                        hideLoading();
+                    });
+                }
+
+                @Override
+                public void onError(String message) {
+                    uiHandler.post(() -> {
+                        hideLoading();
+                        showToast("Error: " + message);
+                    });
+                }
+            });
+        }
     }
 
     private void searchTorrents(String keyword) {
@@ -162,7 +188,7 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
         buildSearchUrl();
         Log.d(TAG, "Search URL: " + searchUrl);
 
-        torrentRepository.searchTorrents(searchUrl, new TorrentRepository.TorrentListener() {
+        torrentRepository.searchTorrents(searchUrl, currentSite, new TorrentRepository.TorrentListener() {
             @Override
             public void onResultsReady(ArrayList<SearchResult> results) {
                 uiHandler.post(() -> {
@@ -184,23 +210,55 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
     }
 
     private void buildSearchUrl() {
-        try {
-            if (!category.equals("All") && !sortItem.equals("Sort by...")) {
-                searchUrl = "https://1337x.to/sort-category-search/" + keyword
-                        + new CategoryList(category).getCategory()
-                        + new SortList(sortItem).getSort() + "1/";
-                Log.d("both",sortItem + "," + new SortList(sortItem).getSort());
-                Log.d("both",category + "," + new CategoryList(category).getCategory());
-            } else if (category.equals("All") && !sortItem.equals("Sort By...")) {
-                Log.d("only sort",sortItem + "," + new SortList(sortItem).getSort());
-                searchUrl = new SortList(sortItem).urlSortSearch(keyword);
-            } else {
-                Log.d("only category",category + "," + new CategoryList(category).getCategory());
-                searchUrl = new CategoryList(category).urlCategorySearch(keyword);
-            }
-        } catch (Exception e) {
-            showToast("Invalid search parameters");
+        SortList sort = new SortList(sortItem);
+        CategoryList categoryList = new CategoryList(category);
+
+        if (currentSite.equals(("1337x"))) {
+            build1337xUrl(sort, categoryList);
         }
+        else if (currentSite.equals(("LimeTorrents"))) {
+            buildLimeTorrentsUrl(sort, categoryList);
+        }
+        Log.d(TAG, "Final Search URL: " + searchUrl);
+    }
+
+    private void build1337xUrl(SortList sort, CategoryList categoryList) {
+        String baseUrl = Url.UrlOneThree;
+
+        if (!category.equals("All") && !sortItem.equals("Sort By...")) {
+            searchUrl = baseUrl + "/sort-category-search/" + keyword
+                    + categoryList.getOneThreeCategory() + sort.getOneThreeSort() + "1/";
+            Log.d(TAG, "Sort and Category URL: " + searchUrl);
+        } else if (!category.equals("All") && sortItem.equals("Sort By...")) {
+            searchUrl = categoryList.OneThreeCategorySearch(keyword);
+            Log.d(TAG, "Category URL: " + searchUrl);
+        } else if (category.equals("All") && !sortItem.equals("Sort By...")) {
+            searchUrl = new SortList(sortItem).urlSortSearch(keyword);
+            Log.d(TAG, "Sort URL: " + searchUrl);
+        } else {
+            searchUrl = baseUrl + "/search/" + keyword + "/1/";
+            Log.d(TAG, "Default URL: " + searchUrl);
+        }
+    }
+
+    private void buildLimeTorrentsUrl(SortList sort, CategoryList categoryList) {
+        String baseUrl = Url.UrlLimeTorrent;
+
+        if (!category.equals("All") && !sortItem.equals("Sort By...")) {
+            searchUrl = baseUrl + "search/"  + categoryList.getLimeCategory() + keyword
+                    + sort.getLimeSort() + "1/";
+            Log.d(TAG, "Sort and Category URL: " + searchUrl);
+        } else if (!category.equals("All") && sortItem.equals("Sort By...")) {
+            searchUrl = categoryList.LimeCategorySearch(keyword);
+            Log.d(TAG, "Category URL: " + searchUrl);
+        } else if (category.equals("All") && !sortItem.equals("Sort By...")) {
+            searchUrl = new SortList(sortItem).urlLimeTorrents(keyword);
+            Log.d(TAG, "Sort URL: " + searchUrl);
+        } else {
+            searchUrl = baseUrl + "search/all/" + keyword + "/1/";
+            Log.d(TAG, "Default URL: " + searchUrl);
+        }
+
     }
 
     private void showLoading() {
@@ -209,6 +267,8 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
             Glide.with(getContext())
                     .load(R.drawable.loading)
                     .into(loadingIcon);
+            torrentsList.clear();
+            torrentAdapter.notifyDataSetChanged();
         });
     }
 
@@ -231,8 +291,71 @@ public class DiscoverFragment extends Fragment implements TorrentAdapter.Recycle
         return false;
     };
 
+    private void updateSpinners() {
+        // Update category spinner
+        ArrayAdapter<CharSequence> categoryAdapter = ArrayAdapter.createFromResource(
+                requireContext(),
+                currentSite.equals(SITE_1337X) ? R.array.OneThree_category_options : R.array.Lime_category_options,
+                android.R.layout.simple_spinner_item
+        );
+        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        categorySpinner.setAdapter(categoryAdapter);
+
+        // Update sort spinner
+        ArrayAdapter<CharSequence> sortAdapter = ArrayAdapter.createFromResource(
+                requireContext(),
+                currentSite.equals(SITE_1337X) ? R.array.OneThree_sort_options : R.array.Lime_sort_options,
+                android.R.layout.simple_spinner_item
+        );
+        sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sortSpinner.setAdapter(sortAdapter);
+
+        // Reset selections
+        categorySpinner.setSelection(0);
+        sortSpinner.setSelection(0);
+    }
+
+    public void on1337xClicked() {
+        currentSite = SITE_1337X;
+        updateSiteSelectionUI();
+        updateSpinners();
+        loadTorrents();
+    }
+
+    public void onLimeTorrentsClicked() {
+        currentSite = SITE_LIME;
+        updateSiteSelectionUI();
+        updateSpinners();
+        loadTorrents();
+    }
+
+    private void loadTorrents() {
+        keyword = inputSearch.getText().toString().trim();
+        if (keyword.isEmpty()) {
+            loadTrendingTorrents();
+        } else {
+            searchTorrents(keyword);
+        }
+    }
+
+
+
+    private void updateSiteSelectionUI() {
+        if (getView() == null) return;
+
+        TextView tv1337x = getView().findViewById(R.id.tv1337x);
+        TextView tvLime = getView().findViewById(R.id.tvLimeTorrents);
+
+        int activeColor = ContextCompat.getColor(requireContext(), R.color.your_active_color);
+        int inactiveColor = ContextCompat.getColor(requireContext(), R.color.design_default_color_primary);
+
+        // Compare using constants
+        tv1337x.setBackgroundColor(currentSite.equals(SITE_1337X) ? activeColor : inactiveColor);
+        tvLime.setBackgroundColor(currentSite.equals(SITE_LIME) ? activeColor : inactiveColor);
+    }
+
     @Override
     public void onItemClick(int position) {
-        // Handle item click
+
     }
 }

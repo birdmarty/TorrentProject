@@ -43,6 +43,7 @@ public class TorrentDownloadService extends Service implements TorrentListener {
         torrentLink = intent.getStringExtra("torrentLink");
         action = intent.getStringExtra("action");
         Log.d(TAG,"Action selected: " + action);
+        Log.d(TAG, "Torrent link: " + torrentLink);
 
         if (action != null && action.equals("Download"))
         {
@@ -56,7 +57,7 @@ public class TorrentDownloadService extends Service implements TorrentListener {
 
         else if (action != null && action.equals("Watch")) {
             if (torrentLink != null) {
-                // add implementation
+                // add watch implementation
             } else {
                 Log.e(TAG, "Torrent link is null");
                 stopSelf();
@@ -77,8 +78,8 @@ public class TorrentDownloadService extends Service implements TorrentListener {
             Element infohashElement = doc.selectFirst("div.infohash-box span");
             if (infohashElement != null) {
                 String infohash = infohashElement.text();
-//                String torrentUrl = "https://itorrents.org/torrent/" + infohash + ".torrent";
-                String torrentUrl = "magnet:?xt=urn:btih:" + infohash;
+                String torrentUrl = "https://itorrents.org/torrent/" + infohash + ".torrent";
+//                String torrentUrl = "magnet:?xt=urn:btih:" + infohash;
 
                 startTorrentDownload(torrentUrl);
 

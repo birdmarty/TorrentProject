@@ -1,49 +1,68 @@
 package com.example.myapplication.parsing;
 
 public class CategoryList {
-    private String category1;
+    private String OneThreeCategory;
+    private String LimeCategory;
 
 
     public CategoryList(String category) {
         switch (category) {
             case "Movies":
-                category1 = "/Movies";
+                OneThreeCategory = "/Movies";
+                LimeCategory = "movies/";
                 break;
             case "All":
-                category1 = "/Movies";
+                OneThreeCategory = "/Movies";
+                LimeCategory = "all/";
                 break;
             case "TV Shows":
-                category1 = "/TV";
+                OneThreeCategory = "/TV";
+                LimeCategory = "tv/";
                 break;
             case "Games":
-                category1 = "/Games";
+                OneThreeCategory = "/Games";
+                LimeCategory = "games/";
                 break;
             case "Music":
-                category1 = "/Music";
+                OneThreeCategory = "/Music";
+                LimeCategory = "music/";
                 break;
             case "Applications":
-                category1 = "/Applications";
+                OneThreeCategory = "/Applications";
+                LimeCategory = "applications/";
                 break;
             case "Documentaries":
-                category1= "/Documentaries";
+                OneThreeCategory = "/Documentaries";
                 break;
             case "Anime":
-                category1 = "/Aninme";
+                OneThreeCategory = "/Aninme";
+                LimeCategory = "anime/";
                 break;
             case "Other":
-                category1 = "/Other";
+                OneThreeCategory = "/Other";
+                LimeCategory = "other/";
                 break;
             case "XXX":
-                category1 = "/XXX";
+                OneThreeCategory = "/XXX";
                 break;
         }
     }
 
-    public String getCategory() {
-        return category1;
+    public String getOneThreeCategory() {
+        return OneThreeCategory;
     }
 
-    public String urlCategorySearch(String keyword) {
-        return "https://www.1337x.to/category-search/" + keyword + category1 + "/1/";
+    public String getLimeCategory() {
+        return LimeCategory;
     }
+
+    public String OneThreeCategorySearch(String keyword) {
+        return "https://www.1337x.to/category-search/" + keyword + OneThreeCategory + "/1/";
+    }
+
+    public String LimeCategorySearch(String keyword) {
+        return "https://www.limetorrents.lol/search/" + LimeCategory + keyword + "/";
+    }
+
+
 }

@@ -2,17 +2,19 @@ package com.example.myapplication.repository;
 
 import android.os.AsyncTask;
 import android.util.Log;
+
+
 import com.example.myapplication.parsing.SearchResult;
+import com.example.myapplication.parsing.Url;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import java.io.IOException;
-import java.util.ArrayList;
 
+import java.util.ArrayList;
 public class TorrentRepository {
     private static final String TAG = "TorrentRepo";
-    private static final String BASE_URL = "https://1337x.to";
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
     private static final int TIMEOUT = 15000;
 
@@ -21,19 +23,25 @@ public class TorrentRepository {
         void onError(String message);
     }
 
-    public void getTrendingTorrents(TorrentListener listener) {
-        new TorrentTask(listener).execute(BASE_URL + "/trending");
+    public void getTrendingTorrents1337x(TorrentListener listener) {
+        new TorrentTask(listener, "1337x").execute(Url.UrlOneThree + "/trending");
     }
 
-    public void searchTorrents(String searchUrl, TorrentListener listener) {
-        new TorrentTask(listener).execute(searchUrl);
+    public void getTrendingTorrentsLimeTorrents(TorrentListener listener) {
+        new TorrentTask(listener, "LimeTorrents").execute(Url.UrlLimeTorrent + "top100");
+    }
+
+    public void searchTorrents(String searchUrl, String site, TorrentListener listener) {
+        new TorrentTask(listener, site).execute(searchUrl);
     }
 
     private static class TorrentTask extends AsyncTask<String, Void, ArrayList<SearchResult>> {
         private final TorrentListener listener;
+        private final String site;
 
-        TorrentTask(TorrentListener listener) {
+        TorrentTask(TorrentListener listener, String site) {
             this.listener = listener;
+            this.site = site;
         }
 
         @Override
@@ -46,26 +54,58 @@ public class TorrentRepository {
                         .ignoreHttpErrors(true)
                         .get();
 
-                Elements rows = doc.select("tbody tr");
-                for (Element row : rows) {
-                    Element titleLink = row.select("td.coll-1 a:not(.icon)").first();
-                    if (titleLink == null) continue;
+                if (site.equals("1337x")) {
+                    // 1337x parsing logic
+                    Elements rows = doc.select("tbody tr");
+                    for (Element row : rows) {
+                        Element titleLink = row.select("td.coll-1 a:not(.icon)").first();
+                        if (titleLink == null) continue;
 
-                    String title = titleLink.text();
-                    String seeds = row.select("td:nth-child(2)").text();
-                    String leeches = row.select("td:nth-child(3)").text();
-                    String size = row.select("td.coll-4").first().ownText();
-                    String link = BASE_URL + titleLink.attr("href");
+                        String title = titleLink.text();
+                        String seeds = row.select("td:nth-child(2)").text();
+                        String leeches = row.select("td:nth-child(3)").text();
+                        String size = row.select("td.coll-4").first().ownText();
+                        String link = Url.UrlOneThree + titleLink.attr("href");
 
-                    results.add(new SearchResult(
-                            title,
-                            "Seeds: " + seeds,
-                            "Leeches: " + leeches,
-                            "Size: " + size,
-                            "1337x",
-                            link,
-                            null  // InfoHash will be fetched later when needed
-                    ));
+                        results.add(new SearchResult(
+                                title, "Seeds: " + seeds, "Leeches: " + leeches,
+                                "Size: " + size, "1337x", link, null
+                        ));
+                    }
+                } else if (site.equals("LimeTorrents")) {
+                    // LimeTorrents parsing logic for both search and trending
+                    Elements items = doc.select("table.table2 tr:not(:has(th))"); // Skip header rows
+                    for (Element item : items) {
+                        try {
+                            Element titleElement = item.selectFirst("td.tdleft a:not([rel=nofollow])");
+                            if (titleElement == null) continue;
+
+                            // Extract title and link
+                            String title = titleElement.text();
+                            String relativeLink = titleElement.attr("href");
+                            String link = Url.UrlLimeTorrent + relativeLink.substring(1); // Remove leading /
+
+                            // Extract other details
+                            Elements tdNormals = item.select("td.tdnormal");
+                            String category = tdNormals.size() > 0 ? tdNormals.get(0).text() : "N/A";
+                            String size = tdNormals.size() > 1 ? tdNormals.get(1).text() : "N/A";
+
+                            String seeds = item.selectFirst("td.tdseed").text();
+                            String leeches = item.selectFirst("td.tdleech").text();
+
+                            results.add(new SearchResult(
+                                    title,
+                                    "Seeds: " + seeds,
+                                    "Leeches: " + leeches,
+                                    "Size: " + size,
+                                    "LimeTorrents",
+                                    link,
+                                    null
+                            ));
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error parsing LimeTorrents item", e);
+                        }
+                    }
                 }
             } catch (Exception e) {
                 if (listener != null) {
