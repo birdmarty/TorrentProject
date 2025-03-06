@@ -33,8 +33,11 @@ import java.util.concurrent.Executors;
 public class TorrentDownloadService extends Service implements TorrentListener {
     private static final String TAG = "TorrentDownloadService";
     private static final String CHANNEL_ID = "torrent_download_channel";
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
+    private static final int TIMEOUT = 15000;
     private TorrentStream torrentStream;
     private String torrentLink;
+    private String detailPageLink;
     private String action;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -42,30 +45,54 @@ public class TorrentDownloadService extends Service implements TorrentListener {
     public int onStartCommand(Intent intent, int flags, int startId) {
         torrentLink = intent.getStringExtra("torrentLink");
         action = intent.getStringExtra("action");
+        detailPageLink = intent.getStringExtra("detailPage");
         Log.d(TAG,"Action selected: " + action);
         Log.d(TAG, "Torrent link: " + torrentLink);
+        Log.d(TAG, "detail page: " + detailPageLink);
 
         if (action != null && action.equals("Download"))
         {
             if (torrentLink != null) {
                 executor.execute(this::fetchAndStartTorrent);
+            }
+            else if (detailPageLink != null) {
+                executor.execute(this::fetchAndStartLime);
             } else {
                 Log.e(TAG, "Torrent link is null");
                 stopSelf();
+            }
+            if (action.equals("Watch")){
+                // add watch implementation here
             }
         }
 
-        else if (action != null && action.equals("Watch")) {
-            if (torrentLink != null) {
-                // add watch implementation
-            } else {
-                Log.e(TAG, "Torrent link is null");
-                stopSelf();
-            }
-        }
 
         return START_STICKY;
     }
+
+    private void fetchAndStartLime() {
+        try {
+            // Fetch infohash from detail page
+            Document detailDoc = Jsoup.connect(detailPageLink)
+                    .userAgent(USER_AGENT)
+                    .timeout(TIMEOUT)
+                    .get();
+
+            Element infohashElement = detailDoc.selectFirst("td:contains(Torrent Hash) + td");
+            if (infohashElement == null) {
+                Log.e(TAG, "Infohash element not found");
+                return;
+                }
+            String infohash = infohashElement.text();
+            torrentLink = "https://itorrents.org/torrent/" + infohash + ".torrent";
+            Log.d(TAG, "Torrent link: " + torrentLink);
+            startTorrentDownload(torrentLink);
+        }
+         catch (Exception e) {
+            Log.e(TAG, "Error parsing LimeTorrents item", e);
+        }
+    }
+
 
     private void fetchAndStartTorrent() {
         try {
@@ -200,6 +227,13 @@ public class TorrentDownloadService extends Service implements TorrentListener {
     @Override
     public void onStreamReady(Torrent torrent) {
         Log.d(TAG, "Stream ready");
+
+        // Show a toast message indicating download is complete
+        runOnUiThread(() -> Toast.makeText(this, "Download finished", Toast.LENGTH_LONG).show());
+
+        // Remove the ongoing notification
+        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        notificationManager.cancel(1);
     }
 
     @Override

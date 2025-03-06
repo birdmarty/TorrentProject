@@ -28,7 +28,7 @@ public class TorrentRepository {
     }
 
     public void getTrendingTorrentsLimeTorrents(TorrentListener listener) {
-        new TorrentTask(listener, "LimeTorrents").execute(Url.UrlLimeTorrent + "top100");
+        new TorrentTask(listener, "LimeTorrentsTrending").execute(Url.UrlLimeTorrent + "top100");
     }
 
     public void searchTorrents(String searchUrl, String site, TorrentListener listener) {
@@ -107,14 +107,39 @@ public class TorrentRepository {
                         }
                     }
                 }
-            } catch (Exception e) {
+                if (site.equals("LimeTorrentsTrending")) {
+                    // Fetch LimeTorrents top 100 torrents
+                    Elements items = doc.select("table.table2 tr:not(:has(th))");
+                    for (Element item : items) {
+                        try {
+                            Element titleElement = item.selectFirst("td.tdleft a:not([rel=nofollow])");
+                            if (titleElement == null) continue;
+
+                            String title = titleElement.text();
+                            String detailPageLink = Url.UrlLimeTorrent + titleElement.attr("href").substring(1); // Remove leading "/"
+                            Log.d(TAG, "Detail page link: " + detailPageLink);
+                            String seeds = item.selectFirst("td.tdseed").text();
+                            String leeches = item.selectFirst("td.tdleech").text();
+                            String size = item.select("td.tdnormal").get(1).text();
+
+                            results.add(new SearchResult(
+                                    title, "Seeds: " + seeds, "Leeches: " + leeches,
+                                    "Size: " + size, detailPageLink,
+                                    null, null
+                            ));
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error parsing LimeTorrents trending item", e);
+                        }
+                    }
+                }
+            }
+            catch(Exception e) {
                 if (listener != null) {
                     listener.onError(e.getMessage());
                 }
             }
             return results;
         }
-
         @Override
         protected void onPostExecute(ArrayList<SearchResult> results) {
             if (listener != null) {

@@ -65,6 +65,7 @@ public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHold
                         serviceIntent.putExtra("infoHash", result.getInfoHash());
                         serviceIntent.putExtra("torrentLink", result.getLink());
                         serviceIntent.putExtra("title", result.getTitle());
+                        serviceIntent.putExtra("detailPage", result.getWebsite());
                         serviceIntent.putExtra("action", selectedAction);
                         Log.d("TorrentAdapter", "Starting service with action: " + selectedAction);
 
