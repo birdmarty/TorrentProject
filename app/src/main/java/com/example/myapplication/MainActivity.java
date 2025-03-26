@@ -37,8 +37,10 @@ import com.example.myapplication.fragments.SearchResultsFragment;
 
 import java.io.File;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements TorrentStreamManager.TorrentStreamListener {
 
+
+    private TorrentStreamManager torrentStreamManager;
     public TorrentStream torrentStream;
     private static final String TAG = "MainActivity";
     private static final int STORAGE_PERMISSION_CODE = 101;
@@ -74,6 +76,36 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    public void startTorrentStream(String magnetUrl) {
+        if (torrentStreamManager != null) {
+            torrentStreamManager.startStream(magnetUrl);
+            Log.d(TAG, "Starting torrent stream: " + magnetUrl);
+        } else {
+            Toast.makeText(this, "Torrent system not initialized", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+
+    @Override
+    public void onProgressUpdate(int progress) {
+
+    }
+
+    @Override
+    public void onStreamReady() {
+        Toast.makeText(this, "Stream ready", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onStreamError(String error) {
+        runOnUiThread(() -> {
+            Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+        });
+    }
+
+
+
+
     private boolean loadFragment(Fragment fragment) {
         if (fragment != null) {
             getSupportFragmentManager().beginTransaction()
@@ -84,38 +116,34 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
-    private void requestPermissions() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            // For Android 11 and above
-            if (!Environment.isExternalStorageManager()) {
-                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                intent.setData(Uri.parse("package:" + getPackageName()));
-                startActivityForResult(intent, STORAGE_PERMISSION_CODE);
-            } else {
-                initTorrentStream();
-            }
-        } else {
-            // For Android 10 and below
-            String[] permissions = {
-                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.INTERNET
-            };
+    private void initializeTorrentSystem() {
+        try {
+            // Initialize download system
+            File saveLocation = new File(Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS), "TorrentStream");
+            if (!saveLocation.exists()) saveLocation.mkdirs();
 
-            boolean allPermissionsGranted = true;
-            for (String permission : permissions) {
-                if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                    allPermissionsGranted = false;
-                    break;
-                }
-            }
+            TorrentOptions torrentOptions = new TorrentOptions.Builder()
+                    .saveLocation(saveLocation)
+                    .removeFilesAfterStop(false)
+                    .build();
+            torrentStream = TorrentStream.init(torrentOptions);
 
-            if (!allPermissionsGranted) {
-                ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_CODE);
-                Toast.makeText(this, "Permissions denied", Toast.LENGTH_LONG).show();
-            }
+            // Initialize streaming system
+            torrentStreamManager = new TorrentStreamManager(this, this);
+        } catch (Exception e) {
+            Toast.makeText(this, "Initialization error: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (torrentStreamManager != null) {
+            torrentStreamManager.cleanup();
+        }
+    }
+
     public void initTorrentStream() {
         try {
             // Create download directory
@@ -166,23 +194,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == STORAGE_PERMISSION_CODE) {
-            boolean allGranted = true;
-            for (int result : grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    allGranted = false;
+    private void requestPermissions() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, STORAGE_PERMISSION_CODE);
+            } else {
+                initializeTorrentSystem();
+            }
+        } else {
+            String[] permissions = {
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.INTERNET
+            };
+
+            boolean allPermissionsGranted = true;
+            for (String permission : permissions) {
+                if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                    allPermissionsGranted = false;
                     break;
                 }
             }
 
-            if (allGranted) {
-                initTorrentStream();
-                Toast.makeText(this, "Permissions granted, initializing TorrentStream", Toast.LENGTH_SHORT).show();
+            if (!allPermissionsGranted) {
+                ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_CODE);
             } else {
-                Toast.makeText(this, "Permissions required for downloading", Toast.LENGTH_LONG).show();
+                initializeTorrentSystem();
             }
         }
     }

@@ -1,5 +1,7 @@
 package com.example.myapplication.adapters;
 
+import static com.github.se_bastiaan.torrentstream.utils.ThreadUtils.runOnUiThread;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -8,20 +10,27 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.myapplication.MainActivity;
 import com.example.myapplication.R;
 import com.example.myapplication.parsing.SearchResult;
 import com.example.myapplication.services.TorrentDownloadService;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 import java.util.List;
 
 public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHolder> {
 
+    private static final String TAG = "TorrentAdapter";
     private final List<SearchResult> results;
-    private final Context context; // Add context field
+    private final Context context;
     private final RecyclerviewListener listener;
 
     public interface RecyclerviewListener {
@@ -29,7 +38,7 @@ public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHold
     }
 
     public TorrentAdapter(Context context, RecyclerviewListener listener, List<SearchResult> results) {
-        this.context = context; // Initialize context
+        this.context = context;
         this.listener = listener;
         this.results = results;
     }
@@ -57,25 +66,68 @@ public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHold
 
             AlertDialog.Builder builder = new AlertDialog.Builder(context);
             builder.setTitle(result.getTitle())
-                    .setItems(new String[]{TorrentActions.ACTION_WATCH, TorrentActions.ACTION_DOWNLOAD}, (dialog, which) -> {
-                        String selectedAction = (which == 0) ? TorrentActions.ACTION_WATCH : TorrentActions.ACTION_DOWNLOAD;
-                        Log.d("TorrentAdapter", "Selected option: " + selectedAction);
-
-                        Intent serviceIntent = new Intent(context, TorrentDownloadService.class);
-                        serviceIntent.putExtra("infoHash", result.getInfoHash());
-                        serviceIntent.putExtra("torrentLink", result.getLink());
-                        serviceIntent.putExtra("title", result.getTitle());
-                        serviceIntent.putExtra("detailPage", result.getWebsite());
-                        serviceIntent.putExtra("action", selectedAction);
-                        Log.d("TorrentAdapter", "Starting service with action: " + selectedAction);
-
-                        context.startService(serviceIntent);
+                    .setItems(new String[]{"Watch", "Download"}, (dialog, which) -> {
+                        if (which == 0) { // Watch action
+                            handleWatchAction(result);
+                        } else { // Download action
+                            handleDownloadAction(result);
+                        }
                     })
                     .show();
         });
+    }
+
+    private void handleWatchAction(SearchResult result) {
+        if (result.getInfoHash() != null) {
+            String magnetLink = "magnet:?xt=urn:btih:" + result.getInfoHash();
+            startStream(magnetLink);
+        } else {
+            new Thread(() -> {
+                try {
+                    Log.d(TAG, "Fetching infohash for: " + result.getLink());
+                    Document doc = Jsoup.connect(result.getLink())
+                            .userAgent("Mozilla/5.0")
+                            .timeout(15000)
+                            .get();
+
+                    // 1337x.to specific infohash location
+                    Element infohashElement = doc.selectFirst("div.infohash-box span");
+                    if (infohashElement != null) {
+                        String infohash = infohashElement.text();
+                        String magnetLink = "magnet:?xt=urn:btih:" + infohash;
+                        Log.d(TAG, "Successfully fetched infohash: " + infohash);
+                        startStream(magnetLink);
+                    } else {
+                        Log.e(TAG, "Infohash element not found");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error fetching infohash", e);
+                    runOnUiThread(() ->
+                            Toast.makeText(context, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                }
+            }).start();
+        }
+    }
+
+    private void startStream(String magnetLink) {
+        runOnUiThread(() -> {
+            if (!magnetLink.isEmpty() && context instanceof MainActivity) {
+                ((MainActivity) context).startTorrentStream(magnetLink);
+            } else {
+                Toast.makeText(context, "Could not get torrent link", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
 
 
-
+    private void handleDownloadAction(SearchResult result) {
+        Intent serviceIntent = new Intent(context, TorrentDownloadService.class);
+        serviceIntent.putExtra("infoHash", result.getInfoHash());
+        serviceIntent.putExtra("torrentLink", result.getLink());
+        serviceIntent.putExtra("title", result.getTitle());
+        serviceIntent.putExtra("detailPage", result.getWebsite());
+        serviceIntent.putExtra("action", "Download");
+        context.startService(serviceIntent);
     }
 
     @Override
