@@ -16,7 +16,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -26,9 +25,9 @@ import androidx.fragment.app.FragmentTransaction;
 
 import com.example.myapplication.fragments.DiscoverFragment;
 import com.example.myapplication.fragments.ProfileFragment;
+import com.example.myapplication.services.TorrentStreamManager;
 import com.github.se_bastiaan.torrentstream.TorrentOptions;
 import com.github.se_bastiaan.torrentstream.TorrentStream;
-import com.github.se_bastiaan.torrentstream.listeners.TorrentListener;
 
 import com.example.myapplication.fragments.HomeFragment;
 
@@ -102,9 +101,6 @@ public class MainActivity extends AppCompatActivity implements TorrentStreamMana
             Toast.makeText(this, error, Toast.LENGTH_LONG).show();
         });
     }
-
-
-
 
     private boolean loadFragment(Fragment fragment) {
         if (fragment != null) {
@@ -185,6 +181,7 @@ public class MainActivity extends AppCompatActivity implements TorrentStreamMana
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                 if (Environment.isExternalStorageManager()) {
                     initTorrentStream();
+                    initializeTorrentSystem();
                     Toast.makeText(this, "Permissions granted, initializing TorrentStream", Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(this, "Manage External Storage permission required", Toast.LENGTH_LONG).show();

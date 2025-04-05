@@ -1,11 +1,16 @@
-package com.example.myapplication;
+package com.example.myapplication.services;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.util.Log;
-import android.widget.Toast;
 
+import androidx.core.app.NotificationCompat;
+
+import com.example.myapplication.R;
 import com.github.se_bastiaan.torrentstream.StreamStatus;
 import com.github.se_bastiaan.torrentstream.Torrent;
 import com.github.se_bastiaan.torrentstream.TorrentOptions;
@@ -20,6 +25,9 @@ import java.net.URL;
 
 public class TorrentStreamManager implements TorrentServerListener {
     private static final String TAG = "TorrentStreamManager";
+    private static final String STREAM_CHANNEL_ID = "torrent_stream_channel";
+    private static final int STREAM_NOTIFICATION_ID = 1001;
+
     private final Context context;
     private TorrentStreamServer torrentStreamServer;
     private TorrentStreamListener listener;
@@ -33,11 +41,24 @@ public class TorrentStreamManager implements TorrentServerListener {
     public TorrentStreamManager(Context context, TorrentStreamListener listener) {
         this.context = context.getApplicationContext();
         this.listener = listener;
+        createNotificationChannel();
         initializeServer();
     }
 
-    private void initializeServer() {
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    STREAM_CHANNEL_ID,
+                    "Stream Status",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Shows streaming preparation progress");
+            NotificationManager manager = context.getSystemService(NotificationManager.class);
+            manager.createNotificationChannel(channel);
+        }
+    }
 
+    private void initializeServer() {
         System.setProperty("nanohttpd.mimetypes", "mimetypes.properties");
 
         TorrentOptions torrentOptions = new TorrentOptions.Builder()
@@ -67,6 +88,7 @@ public class TorrentStreamManager implements TorrentServerListener {
         if (torrentStreamServer != null) {
             torrentStreamServer.stopStream();
             deleteFiles();
+            cancelNotification();
         }
     }
 
@@ -116,24 +138,69 @@ public class TorrentStreamManager implements TorrentServerListener {
     public void onStreamError(Torrent torrent, Exception e) {
         listener.onStreamError(e.getMessage());
         deleteFiles();
+        showErrorNotification(e.getMessage());
+    }
+
+    private void showErrorNotification(String message) {
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, STREAM_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_error)
+                .setContentTitle("Stream Error")
+                .setContentText(message)
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
+
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        manager.notify(STREAM_NOTIFICATION_ID, builder.build());
     }
 
     @Override
     public void onStreamReady(Torrent torrent) {
         listener.onStreamReady();
+        showStreamReadyNotification();
     }
 
     @Override
     public void onStreamProgress(Torrent torrent, StreamStatus status) {
         if (status.bufferProgress < 100) {
-            Log.d(TAG, "Progress: " + status.bufferProgress + " speed: " + (status.downloadSpeed / 1024) + " seeds: " + status.seeds);
-            listener.onProgressUpdate(status.bufferProgress);
+            int progress = (int) status.bufferProgress;
+            Log.d(TAG, "Progress: " + progress + "%");
+            listener.onProgressUpdate(progress);
+            showStreamNotification(progress);
         }
+    }
+
+    private void showStreamNotification(int progress) {
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, STREAM_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stream)
+                .setContentTitle("Preparing Stream")
+                .setContentText("Buffering... " + progress + "%")
+                .setProgress(100, progress, false)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true);
+
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        manager.notify(STREAM_NOTIFICATION_ID, builder.build());
+    }
+
+    private void showStreamReadyNotification() {
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, STREAM_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stream_ready)
+                .setContentTitle("Stream Ready")
+                .setContentText("Tap to open player")
+                .setAutoCancel(true);
+
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        manager.notify(STREAM_NOTIFICATION_ID, builder.build());
+    }
+
+    private void cancelNotification() {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        manager.cancel(STREAM_NOTIFICATION_ID);
     }
 
     @Override
     public void onStreamStopped() {
         deleteFiles();
+        cancelNotification();
     }
 
     @Override
@@ -162,7 +229,6 @@ public class TorrentStreamManager implements TorrentServerListener {
 
             int responseCode = connection.getResponseCode();
             if (responseCode == 200) {
-                // Add small delay to ensure server is ready
                 Thread.sleep(500);
                 launchVlcPlayer(streamUri);
             } else {
@@ -173,7 +239,6 @@ public class TorrentStreamManager implements TorrentServerListener {
             listener.onStreamError("Connection failed: " + e.getMessage());
         }
     }
-
 
     private void launchVlcPlayer(Uri streamUri) {
         try {
@@ -202,5 +267,5 @@ public class TorrentStreamManager implements TorrentServerListener {
     }
 
     // Unused TorrentServerListener methods
- public void onServerReady(Torrent torrent) {}
+    public void onServerReady(Torrent torrent) {}
 }
