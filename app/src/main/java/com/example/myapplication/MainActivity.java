@@ -21,10 +21,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.example.myapplication.fragments.DiscoverFragment;
 import com.example.myapplication.fragments.ProfileFragment;
+import com.example.myapplication.fragments.SignIn;
+import com.example.myapplication.fragments.SignUp;
 import com.example.myapplication.services.TorrentStreamManager;
 import com.github.se_bastiaan.torrentstream.TorrentOptions;
 import com.github.se_bastiaan.torrentstream.TorrentStream;
@@ -33,10 +36,12 @@ import com.example.myapplication.fragments.HomeFragment;
 
 
 import com.example.myapplication.fragments.SearchResultsFragment;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.io.File;
 
-public class MainActivity extends AppCompatActivity implements TorrentStreamManager.TorrentStreamListener {
+public class MainActivity extends AppCompatActivity implements TorrentStreamManager.TorrentStreamListener, SignIn.AuthListener, SignUp.AuthListener{
 
 
     private TorrentStreamManager torrentStreamManager;
@@ -65,15 +70,58 @@ public class MainActivity extends AppCompatActivity implements TorrentStreamMana
         Button btnDiscover = findViewById(R.id.btn_discover);
 
         // Load the default fragment
-        loadFragment(new HomeFragment());
+//        loadFragment(new HomeFragment());
+        loadFragment(new SignUp());
 
-        btnHome.setOnClickListener(v -> loadFragment(new HomeFragment()));
+//        btnHome.setOnClickListener(v -> loadFragment(new HomeFragment()));
+        btnHome.setOnClickListener(v -> loadFragment(new SignUp()));
 //        btnMovies.setOnClickListener(v -> loadFragment(new MoviesFragment()));
 //        btnShows.setOnClickListener(v -> loadFragment(new ShowsFragment()));
         btnProfile.setOnClickListener(v -> loadFragment(new ProfileFragment()));
         btnDiscover.setOnClickListener(v -> loadFragment(new DiscoverFragment()));
 
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() != null && auth.getCurrentUser().isEmailVerified()) {
+            loadFragment(new HomeFragment());
+        } else {
+            loadFragment(new SignUp());
+        }
+
+
+        btnHome.setOnClickListener(v -> {
+            if (isUserAuthenticated()) {
+                loadFragment(new HomeFragment());
+            } else {
+                loadFragment(new SignUp());
+            }
+        });
+
+        btnProfile.setOnClickListener(v -> {
+            if (isUserAuthenticated()) {
+                loadFragment(new ProfileFragment());
+            } else {
+                loadFragment(new SignUp());
+            }
+        });
+        // TODO: Move sign up to profile section, this shit is retarded...
+
     }
+
+    private boolean isUserAuthenticated() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        return user != null && user.isEmailVerified();
+    }
+
+    @Override
+    public void onAuthSuccess() {
+        runOnUiThread(() -> {
+            loadFragment(new HomeFragment());
+            // Clear back stack
+            getSupportFragmentManager().popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+        });
+    }
+
+
 
     public void startTorrentStream(String magnetUrl) {
         if (torrentStreamManager != null) {

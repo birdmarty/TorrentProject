@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.myapplication.MainActivity;
 import com.example.myapplication.R;
+import com.example.myapplication.models.WatchedTorrent;
 import com.example.myapplication.parsing.SearchResult;
 import com.example.myapplication.services.TorrentDownloadService;
 
@@ -26,12 +27,28 @@ import org.jsoup.nodes.Element;
 
 import java.util.List;
 
+import com.google.firebase.Timestamp;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import java.util.HashMap;
+import java.util.Map;
+
 public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHolder> {
 
     private static final String TAG = "TorrentAdapter";
     private final List<SearchResult> results;
     private final Context context;
     private final RecyclerviewListener listener;
+
+    private static final String COLLECTION_WATCHED = "watched_torrents";
+    private static final String FIELD_TITLE = "title";
+    private static final String FIELD_INFOHASH = "infoHash";
+    private static final String FIELD_TIMESTAMP = "timestamp";
+    private static final String FIELD_USERID = "userId";
+    private static final String FIELD_MAGNET = "magnetLink";
+
+    private final FirebaseFirestore db = FirebaseFirestore.getInstance();
+    private final FirebaseAuth mAuth = FirebaseAuth.getInstance();
 
     public interface RecyclerviewListener {
         void onItemClick(int position);
@@ -77,9 +94,42 @@ public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHold
         });
     }
 
+
+    private void saveToFirestore(SearchResult result, String magnetLink) {
+        String userId = mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getUid() : null;
+        if (userId == null) {
+            Toast.makeText(context, "You must be logged in to save progress", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        WatchedTorrent torrent = new WatchedTorrent(
+                result.getTitle(),
+                result.getInfoHash(),
+                magnetLink,
+                result.getLink(),       // torrentLink
+                result.getWebsite(),    // website
+                com.google.firebase.Timestamp.now(),
+                userId,
+                result.getSize()
+        );
+
+        db.collection(COLLECTION_WATCHED)
+                .add(torrent)
+                .addOnSuccessListener(documentReference ->
+                        Log.d(TAG, "Torrent saved with ID: " + documentReference.getId()))
+                .addOnFailureListener(e -> {
+                    Log.w(TAG, "Error saving torrent", e);
+                    runOnUiThread(() ->
+                            Toast.makeText(context, "Failed to save progress", Toast.LENGTH_SHORT).show());
+                });
+    }
+
+
+
     private void handleWatchAction(SearchResult result) {
         if (result.getInfoHash() != null) {
             String magnetLink = "magnet:?xt=urn:btih:" + result.getInfoHash();
+            saveToFirestore(result, magnetLink);
             startStream(magnetLink);
         } else {
             new Thread(() -> {
@@ -95,6 +145,7 @@ public class TorrentAdapter extends RecyclerView.Adapter<TorrentAdapter.ViewHold
                     if (infohashElement != null) {
                         String infohash = infohashElement.text();
                         String magnetLink = "magnet:?xt=urn:btih:" + infohash;
+                        saveToFirestore(result, magnetLink);
                         Log.d(TAG, "Successfully fetched infohash: " + infohash);
                         startStream(magnetLink);
                     } else {
